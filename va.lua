@@ -6,6 +6,9 @@ require 'nn'
 require 'Reparametrize'
 require 'BCECriterion'
 
+--Custom Linear to support different reset function
+require 'LinearVA'
+
 train = torch.load('mnist.t7/train_32x32.t7', 'ascii')
 test = torch.load('mnist.t7/test_32x32.t7', 'ascii')
 
@@ -14,48 +17,84 @@ train.data = train.data:double()
 test.data = test.data:double()
 
 --Rescale to 0..1 and invert
-train.data:div(-255):add(1):resize(60000,1024,1)
-test.data:div(-255):add(1):resize(10000,1024,1)
+train.data:div(-255):add(1):resize(60000,1024)
+test.data:div(-255):add(1):resize(10000,1024)
 
 
 dim_input = 1024 --32x32
 dim_hidden = 20
-hidden_units_encoder = 400
-hidden_units_decoder = 400
+hidden_units_encoder = 200
+hidden_units_decoder = 200
 
 batchSize = 100
 
--- Check reset function of linear, uses uniform distribution
 va = nn.Sequential()
-va:add(nn.Linear(dim_input,hidden_units_encoder))
+va:add(nn.LinearVA(dim_input,hidden_units_encoder))
 va:add(nn.Tanh())
 
 c = nn.ConcatTable()
-c:add(nn.Linear(hidden_units_encoder, dim_hidden))
-c:add(nn.Linear(hidden_units_encoder, dim_hidden))
+c:add(nn.LinearVA(hidden_units_encoder, dim_hidden))
+c:add(nn.LinearVA(hidden_units_encoder, dim_hidden))
 va:add(c)
 
 va:add(nn.Reparametrize(dim_hidden))
 
 --Decoding layer
-va:add(nn.Linear(dim_hidden, hidden_units_decoder))
+va:add(nn.LinearVA(dim_hidden, hidden_units_decoder))
 va:add(nn.Tanh())
-va:add(nn.Linear(hidden_units_decoder, dim_input))
+va:add(nn.LinearVA(hidden_units_decoder, dim_input))
 va:add(nn.Sigmoid())
 
 --Binary cross entropy term
 criterion = nn.BCECriterion()
 
-paremeters, gradParameters = va:getParameters()
+parameters, gradParameters = va:getParameters()
 
-output = va:forward(train.data[1]:t())
-err = criterion:forward(output, train.data[1]:t())
-df_do = criterion:backward(output, train.data[1]:t())
-va:backward(train.data[1]:t(),df_do)
-print(gradParameters)
+function run(dataset)
+    local lowerbound = 0
+    for i = 1, 50000, batchSize do
+        batch = dataset[{{i,i+batchSize}}]
 
-function train(dataset)
-    prior =  torch.sum(torch.add(va:get(4).sigma,1):add(-(va:get(4).mu:pow(2))):add(-va:get(4).sigma:exp()))
-    lowerbound = err + 0.5 * prior
+        gradParameters:zero()
 
+        output = va:forward(batch)
+
+        --Waste to clone here, see if it is possible to avoid by refactoring BCECriterion:updateOutput
+        err = criterion:forward(output:clone(), batch)
+        df_dw = criterion:backward(output:clone(), batch)
+        va:backward(batch,df_dw)
+
+        -- sum(1 + log(sigma^2) - mu^2 - sigma^2)
+        prior =  torch.sum(torch.add(va:get(4).sigma,1):add(-(va:get(4).mu:pow(2))):add(-va:get(4).sigma:exp()))
+        batchlowerbound =  err + 0.5 * prior
+        lowerbound = lowerbound + batchlowerbound
+        for j=1,8 do
+            if type(va:get(j).weight) ~= 'nil' then
+                print(torch.norm(va:get(j).gradWeight))
+            end
+        end
+        print("-----------")
+        for j=1,2 do
+            if type(c:get(j).weight) ~= 'nil' then
+                print(torch.norm(c:get(j).gradWeight))
+            end
+        end
+        print("-----------")
+        -- print(batchlowerbound/batchSize)
+
+        va:updateParameters(-0.03/batchSize)
+
+        -- print("----weights after update---")
+        -- for j=1,2 do
+        --     print(c:get(j).weight)
+        --     io.write("Next step?")
+        --     answer = io.read()
+        -- end
+    end
+    print("------------------")
+    print(lowerbound/50000)
+end
+
+while true do
+    run(train.data)
 end
