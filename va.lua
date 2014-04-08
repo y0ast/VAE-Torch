@@ -26,7 +26,7 @@ dim_hidden = 20
 hidden_units_encoder = 200
 hidden_units_decoder = 200
 
-batchSize = 10
+batchSize = 100
 
 va = nn.Sequential()
 va:add(nn.LinearVA(dim_input,hidden_units_encoder))
@@ -80,8 +80,10 @@ function run(dataset)
         -- end
         -- print("-----------")
         print(i, batchlowerbound/batchSize)
+        -- io.read()
 
-        va:updateParameters(-0.03/batchSize)
+        va:updateParameters(-0.003/batchSize)
+        collectgarbage()
 
     end
     print("------------------")

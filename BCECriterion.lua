@@ -12,7 +12,7 @@ end
 function BCECriterion:updateGradInput(input, target)
     -- target / input - (1 - target) / (1 - input)
     self.gradInput = torch.cdiv(target,input)
-    self.gradInput:add(torch.cdiv(torch.add(-target,1),torch.add(-input,1)))
+    self.gradInput:add(-1,torch.cdiv(torch.add(-target,1),torch.add(-input,1)))
 
     return self.gradInput
 end
