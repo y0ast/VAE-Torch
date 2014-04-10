@@ -15,7 +15,9 @@ function Reparametrize:updateOutput(input)
     self.mu = input[1]:clone()
     self.sigma = input[2]:clone()
 
-    self.eps = torch.randn(input[2]:size())
+    --Different eps for whole batch, or one and broadcast?
+    -- self.eps = torch.randn(input[2]:size())
+    self.eps = torch.randn(1,self.dimension):expandAs(input[2])
     self.output = torch.mul(input[2],0.5):exp():cmul(self.eps)
 
     -- Add the mean_
