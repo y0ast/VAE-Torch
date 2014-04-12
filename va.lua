@@ -2,6 +2,7 @@
 
 require 'torch'
 require 'nn'
+require 'hdf5'
 
 require 'Reparametrize'
 require 'BCECriterion'
@@ -9,26 +10,43 @@ require 'BCECriterion'
 --Custom Linear to support different reset function
 require 'LinearVA'
 
-train = torch.load('mnist.t7/train_32x32.t7', 'ascii')
-test = torch.load('mnist.t7/test_32x32.t7', 'ascii')
+function loadTorch()
+    train = torch.load('mnist/train_32x32.t7', 'ascii')
+    test = torch.load('mnist/test_32x32.t7', 'ascii')
 
---Convert training data to floats
-train.data = train.data:double()
-test.data = test.data:double()
+    --Convert training data to floats
+    train.data = train.data:double()
+    test.data = test.data:double()
 
---Rescale to 0..1 and invert
-train.data:div(255):resize(60000,1024)
-test.data:div(255):resize(10000,1024)
+    --Rescale to 0..1 and invert
+    train.data:div(255):resize(60000,1024)
+    test.data:div(255):resize(10000,1024)
+end
 
+function loadTheano()
+    local f = hdf5.open('mnist/mnist.hdf5', 'r')
 
-dim_input = 1024 --32x32
+    train = {}
+    train.data = f:read('x_train'):all():double()
+    print(train)
+
+    valid = {}
+    valid.data = f:read('x_valid'):all():double()
+
+    test = {}
+    test.data = f:read('x_test'):all():double()
+end
+
+loadTheano()
+
+dim_input = train.data:size(2) 
 dim_hidden = 20
 hidden_units_encoder = 200
 hidden_units_decoder = 200
 
 batchSize = 100
 
-learningRate = 0.05
+learningRate = 0.03
 
 va = nn.Sequential()
 va:add(nn.LinearVA(dim_input,hidden_units_encoder))
@@ -104,13 +122,13 @@ function updateParameters(AdaGrad)
             weights[i]:add(update)
         end
     else
-        va:updateParameters(-0.03/batchSize)
+        va:updateParameters(-learningRate/batchSize)
     end
 end
 
 function run(dataset)
     local lowerbound = 0
-    for i = 1, 50000, batchSize do
+    for i = 1, dataset:size(1), batchSize do
         batch = dataset[{{i,i+batchSize-1}}]
 
         va:zeroGradParameters()
@@ -127,14 +145,16 @@ function run(dataset)
         lowerbound = lowerbound + batchlowerbound
 
         updateParameters(False)
+        -- printWeights()
+        -- io.read()
 
-        collectgarbage()
         print(i, batchlowerbound/batchSize)
         if batchlowerbound/batchSize < -1000 then 
             printWeights()
             os.exit()
         end
 
+        collectgarbage()
     end
     print("lowerbound", lowerbound/50000)
 end
