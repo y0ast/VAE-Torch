@@ -2,55 +2,37 @@
 
 require 'torch'
 require 'nn'
-require 'hdf5'
 
+--Packages necessary for SGVB
 require 'Reparametrize'
 require 'BCECriterion'
 require 'KLDCriterion'
 
-
---Custom Linear to support different reset function
+--Custom Linear module to support different reset function
 require 'LinearVA'
 
-function load32()
-    train = torch.load('mnist/train_32x32.t7', 'ascii')
-    test = torch.load('mnist/test_32x32.t7', 'ascii')
+--For loading data files
+require 'load'
 
-    --Convert training data to floats
-    train.data = train.data:double()
-    test.data = test.data:double()
+require 'adagrad'
 
-    --Rescale to 0..1 and invert
-    train.data:div(255):resize(60000,1024)
-    test.data:div(255):resize(10000,1024)
-end
+data = load28('mnist/mnist.hdf5')
 
-function load28()
-    local f = hdf5.open('mnist/mnist.hdf5', 'r')
-
-    train = {}
-    train.data = f:read('x_train'):all():double()
-
-    valid = {}
-    valid.data = f:read('x_valid'):all():double()
-
-    test = {}
-    test.data = f:read('x_test'):all():double()
-end
-
-load28()
-
-dim_input = train.data:size(2) 
+dim_input = data.train:size(2) 
 dim_hidden = 20
 hidden_units_encoder = 400
 hidden_units_decoder = 400
 
 batchSize = 100
-
 learningRate = 0.01
+
+adaGradInitRounds = 10
 
 torch.manualSeed(1)
 
+--The model
+
+--Encoding layer
 encoder = nn.Sequential()
 encoder:add(nn.LinearVA(dim_input,hidden_units_encoder))
 encoder:add(nn.Tanh())
@@ -63,6 +45,8 @@ encoder:add(z)
 
 va = nn.Sequential()
 va:add(encoder)
+
+--Reparametrization step
 va:add(nn.Reparametrize(dim_hidden))
 
 --Decoding layer
@@ -72,117 +56,36 @@ va:add(nn.LinearVA(hidden_units_decoder, dim_input))
 va:add(nn.Sigmoid())
 
 --Binary cross entropy term
-criterion = nn.BCECriterion()
-
+BCE = nn.BCECriterion()
 KLD = nn.KLDCriterion()
 
-function printWeights()
-    print("grads")
-    for j=1,#grads do
-        print(torch.norm(grads[j]))
-    end
-    print("Weights")
-    weights, grads = va:parameters()
-    for j=1,#weights do
-        print(torch.norm(weights[j]))
-    end
-end
-
-h = {}
-
-for i = 1,1000, batchSize do
-    local batch = train.data[{{i,i+batchSize-1}}]
-
+opfunc = function(batch) 
     va:zeroGradParameters()
 
-    output = va:forward(batch)
-    err = criterion:forward(output, batch)
-    df_dw = criterion:backward(output, batch)
+    f = va:forward(batch)
+    err = BCE:forward(f, batch)
+    df_dw = BCE:backward(f, batch)
     va:backward(batch,df_dw)
 
-    prior = KLD:forward(va:get(1).output, batch)
-    dp_dw = KLD:backward(va:get(1).output, batch)
-    encoder:backward(batch,dp_dw)
+    KLDerr = KLD:forward(va:get(1).output, batch)
+    de_dw = KLD:backward(va:get(1).output, batch)
+    encoder:backward(batch,de_dw)
 
+    lowerbound = err  + KLDerr
     weights, grads = va:parameters()
 
-    for i=1,#grads do
-        if h[i] == nil then
-            h[i] = torch.cmul(grads[i],grads[i]):add(0.01)
-        else
-            h[i]:add(torch.cmul(grads[i],grads[i]))
-        end
-    end
+    return weights, grads, lowerbound
 end
 
-collectgarbage()
-
-print("AdaGrad matrix initialized")
-
-
-function params(AdaGrad)
-    if AdaGrad then
-        weights, grads = va:parameters()
-        for i=1,#h do
-            h[i]:add(torch.cmul(grads[i],grads[i]))
-            if i % 2 == 0 then
-                prior = 0
-            else
-                prior = -torch.mul(weights[i],0.5):mul(batchSize/train.data:size(1))
-            end
-
-            update = torch.Tensor(h[i]:size()):fill(-learningRate)
-            update:cdiv(torch.sqrt(h[i])):cmul(torch.add(grads[i],prior))
-
-            weights[i]:add(update)
-        end
-    else
-        va:updateParameters(-learningRate/batchSize)
-    end
-end
-
-
-function run(dataset)
-    local lowerbound = 0
-    for i = 1, dataset:size(1), batchSize do
-        batch = dataset[{{i,i+batchSize-1}}]
-
-        va:zeroGradParameters()
-
-        output = va:forward(batch)
-        err = criterion:forward(output, batch)
-        df_dw = criterion:backward(output, batch)
-        va:backward(batch,df_dw)
-
-        prior = KLD:forward(va:get(1).output, batch)
-        dp_dw = KLD:backward(va:get(1).output, batch)
-        encoder:backward(batch,dp_dw)
-
-        weights, grads = va:parameters()
-        -- printWeights()
-
-        batchlowerbound =  err + prior
-        lowerbound = lowerbound + batchlowerbound
-
-        
-        -- print(i, err)
-        -- print(i, prior)
-        -- print(batchlowerbound/batchSize)
-
-        AdaGrad = true
-        params(AdaGrad)
-        -- io.read()
-
-        if batchlowerbound/batchSize < -1000 then 
-            printWeights()
-            os.exit()
-        end
-
-        collectgarbage()
-    end
-    print("lowerbound", lowerbound/dataset:size(1))
-end
+h = adaGradInit(data.train, opfunc, adaGradInitRounds)
 
 while true do
-    run(train.data)
+    local lowerbound = 0
+    for i = 1, data.train:size(1), batchSize do
+        batch = data.train[{{i,i+batchSize-1}}]
+
+        batchlowerbound = adaGradUpdate(batch, opfunc)
+        lowerbound = lowerbound + batchlowerbound
+    end
+    print("lowerbound", lowerbound/data.train:size(1))
 end
