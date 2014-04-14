@@ -12,12 +12,9 @@ function Reparametrize:__init(dimension)
 end 
 
 function Reparametrize:updateOutput(input)
-    self.mu = input[1]:clone()
-    self.sigma = input[2]:clone()
-
     --Different eps for whole batch, or one and broadcast?
-    -- self.eps = torch.randn(input[2]:size())
-    self.eps = torch.randn(1,self.dimension):expandAs(input[2])
+    -- self.eps = torch.randn(1, self.dimension):expandAs(input[2])
+    self.eps = torch.randn(input[2]:size(1),self.dimension)
     self.output = torch.mul(input[2],0.5):exp():cmul(self.eps)
 
     -- Add the mean_
@@ -31,7 +28,7 @@ function Reparametrize:updateGradInput(input, gradOutput)
     self.gradInput[1] = gradOutput:clone()
     
     --Not sure if this gradient is right
-    self.gradInput[2] = torch.mul(input[2],0.5):exp():cmul(self.eps)
+    self.gradInput[2] = torch.mul(input[2],0.5):exp():mul(0.5):cmul(self.eps)
     self.gradInput[2]:cmul(gradOutput)
 
     return self.gradInput

@@ -6,11 +6,13 @@ require 'hdf5'
 
 require 'Reparametrize'
 require 'BCECriterion'
+require 'KLDCriterion'
+
 
 --Custom Linear to support different reset function
 require 'LinearVA'
 
-function loadTorch()
+function load32()
     train = torch.load('mnist/train_32x32.t7', 'ascii')
     test = torch.load('mnist/test_32x32.t7', 'ascii')
 
@@ -23,12 +25,11 @@ function loadTorch()
     test.data:div(255):resize(10000,1024)
 end
 
-function loadTheano()
+function load28()
     local f = hdf5.open('mnist/mnist.hdf5', 'r')
 
     train = {}
     train.data = f:read('x_train'):all():double()
-    print(train)
 
     valid = {}
     valid.data = f:read('x_valid'):all():double()
@@ -37,26 +38,31 @@ function loadTheano()
     test.data = f:read('x_test'):all():double()
 end
 
-loadTheano()
+load28()
 
 dim_input = train.data:size(2) 
 dim_hidden = 20
-hidden_units_encoder = 200
-hidden_units_decoder = 200
+hidden_units_encoder = 400
+hidden_units_decoder = 400
 
 batchSize = 100
 
 learningRate = 0.03
 
+torch.manualSeed(1)
+
+encoder = nn.Sequential()
+encoder:add(nn.LinearVA(dim_input,hidden_units_encoder))
+encoder:add(nn.Tanh())
+
+z = nn.ConcatTable()
+z:add(nn.LinearVA(hidden_units_encoder, dim_hidden))
+z:add(nn.LinearVA(hidden_units_encoder, dim_hidden))
+
+encoder:add(z)
+
 va = nn.Sequential()
-va:add(nn.LinearVA(dim_input,hidden_units_encoder))
-va:add(nn.Tanh())
-
-c = nn.ConcatTable()
-c:add(nn.LinearVA(hidden_units_encoder, dim_hidden))
-c:add(nn.LinearVA(hidden_units_encoder, dim_hidden))
-va:add(c)
-
+va:add(encoder)
 va:add(nn.Reparametrize(dim_hidden))
 
 --Decoding layer
@@ -68,9 +74,23 @@ va:add(nn.Sigmoid())
 --Binary cross entropy term
 criterion = nn.BCECriterion()
 
+KLD = nn.KLDCriterion()
+
+function printWeights()
+    -- print("Weights")
+    -- weights, grads = va:parameters()
+    -- for j=1,#weights do
+        -- print(torch.norm(weights[j]))
+    -- end
+    print("grads")
+    for j=1,#grads do
+        print(torch.norm(grads[j]))
+    end
+end
+
 h = {}
 
-for i = 1,5000, batchSize do
+for i = 1,1000, batchSize do
     batch = train.data[{{i,i+batchSize-1}}]
 
     va:zeroGradParameters()
@@ -79,6 +99,10 @@ for i = 1,5000, batchSize do
     err = criterion:forward(output, batch)
     df_dw = criterion:backward(output, batch)
     va:backward(batch,df_dw)
+
+    prior = KLD:forward(va:get(1).output, batch)
+    dp_dw = KLD:backward(va:get(1).output, batch)
+    encoder:backward(batch,dp_dw)
 
     weights, grads = va:parameters()
 
@@ -91,20 +115,11 @@ for i = 1,5000, batchSize do
     end
 end
 
+collectgarbage()
 
 print("AdaGrad matrix initialized")
 
-function printWeights()
-    print("Weights")
-    weights, grads = va:parameters()
-    for j=1,#weights do
-        print(torch.norm(weights[j]))
-    end
-    print("grads")
-    for j=1,#grads do
-        print(torch.norm(grads[j]))
-    end
-end
+
 function updateParameters(AdaGrad)
     if AdaGrad then
         weights, grads = va:parameters()
@@ -126,6 +141,7 @@ function updateParameters(AdaGrad)
     end
 end
 
+
 function run(dataset)
     local lowerbound = 0
     for i = 1, dataset:size(1), batchSize do
@@ -138,17 +154,21 @@ function run(dataset)
         df_dw = criterion:backward(output, batch)
         va:backward(batch,df_dw)
 
-        -- sum(1 + log(sigma^2) - mu^2 - sigma^2)
-        prior =  torch.sum(torch.add(va:get(4).sigma,1):add(-1,torch.pow(va:get(4).mu,2)):add(-torch.exp(va:get(4).sigma)))
+        prior = KLD:forward(va:get(1).output, batch)
+        dp_dw = KLD:backward(va:get(1).output, batch)
+        encoder:backward(batch,dp_dw)
 
-        batchlowerbound =  err + 0.5 * prior
+        weights, grads = va:parameters()
+        printWeights()
+
+        batchlowerbound =  err + prior
         lowerbound = lowerbound + batchlowerbound
 
-        updateParameters(False)
-        -- printWeights()
-        -- io.read()
+        updateParameters(True)
+        print(i, err)
+        print(i, prior)
+        io.read()
 
-        print(i, batchlowerbound/batchSize)
         if batchlowerbound/batchSize < -1000 then 
             printWeights()
             os.exit()
@@ -156,7 +176,7 @@ function run(dataset)
 
         collectgarbage()
     end
-    print("lowerbound", lowerbound/50000)
+    print("lowerbound", lowerbound/dataset:size(1))
 end
 
 while true do
