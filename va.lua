@@ -47,7 +47,7 @@ hidden_units_decoder = 400
 
 batchSize = 100
 
-learningRate = 0.03
+learningRate = 0.01
 
 torch.manualSeed(1)
 
@@ -77,21 +77,21 @@ criterion = nn.BCECriterion()
 KLD = nn.KLDCriterion()
 
 function printWeights()
-    -- print("Weights")
-    -- weights, grads = va:parameters()
-    -- for j=1,#weights do
-        -- print(torch.norm(weights[j]))
-    -- end
     print("grads")
     for j=1,#grads do
         print(torch.norm(grads[j]))
+    end
+    print("Weights")
+    weights, grads = va:parameters()
+    for j=1,#weights do
+        print(torch.norm(weights[j]))
     end
 end
 
 h = {}
 
 for i = 1,1000, batchSize do
-    batch = train.data[{{i,i+batchSize-1}}]
+    local batch = train.data[{{i,i+batchSize-1}}]
 
     va:zeroGradParameters()
 
@@ -120,7 +120,7 @@ collectgarbage()
 print("AdaGrad matrix initialized")
 
 
-function updateParameters(AdaGrad)
+function params(AdaGrad)
     if AdaGrad then
         weights, grads = va:parameters()
         for i=1,#h do
@@ -128,11 +128,11 @@ function updateParameters(AdaGrad)
             if i % 2 == 0 then
                 prior = 0
             else
-                prior = -torch.mul(weights[i],0.5):mul(batchSize/50000)
+                prior = -torch.mul(weights[i],0.5):mul(batchSize/train.data:size(1))
             end
 
-            update = torch.Tensor(h[i]:size()):fill(learningRate)
-            update:cdiv(h[i]):cmul(torch.add(grads[i],prior))
+            update = torch.Tensor(h[i]:size()):fill(-learningRate)
+            update:cdiv(torch.sqrt(h[i])):cmul(torch.add(grads[i],prior))
 
             weights[i]:add(update)
         end
@@ -159,15 +159,19 @@ function run(dataset)
         encoder:backward(batch,dp_dw)
 
         weights, grads = va:parameters()
-        printWeights()
+        -- printWeights()
 
         batchlowerbound =  err + prior
         lowerbound = lowerbound + batchlowerbound
 
-        updateParameters(True)
-        print(i, err)
-        print(i, prior)
-        io.read()
+        
+        -- print(i, err)
+        -- print(i, prior)
+        -- print(batchlowerbound/batchSize)
+
+        AdaGrad = true
+        params(AdaGrad)
+        -- io.read()
 
         if batchlowerbound/batchSize < -1000 then 
             printWeights()
