@@ -1,7 +1,8 @@
 -- Joost van Amersfoort - <joost@joo.st>
-
+require 'sys'
 require 'torch'
 require 'nn'
+require 'xlua'
 
 --Packages necessary for SGVB
 require 'Reparametrize'
@@ -24,11 +25,13 @@ hidden_units_encoder = 400
 hidden_units_decoder = 400
 
 batchSize = 100
-learningRate = 0.01
+learningRate = 0.03
 
 adaGradInitRounds = 10
 
 torch.manualSeed(1)
+--Does not seem to do anything
+torch.setnumthreads(2)
 
 --The model
 
@@ -79,13 +82,19 @@ end
 
 h = adaGradInit(data.train, opfunc, adaGradInitRounds)
 
+epoch = 0
 while true do
+    epoch = epoch + 1
     local lowerbound = 0
+    local time = sys.clock()
     for i = 1, data.train:size(1), batchSize do
+        xlua.progress(i+batchSize-1, data.train:size(1))
         batch = data.train[{{i,i+batchSize-1}}]
 
         batchlowerbound = adaGradUpdate(batch, opfunc)
         lowerbound = lowerbound + batchlowerbound
     end
-    print("lowerbound", lowerbound/data.train:size(1))
+
+    print("\nEpoch: " .. epoch .. " Lowerbound: " .. lowerbound/data.train:size(1) .. " time: " .. sys.clock() - time)
+    io.read()
 end
