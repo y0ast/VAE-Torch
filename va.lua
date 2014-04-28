@@ -17,7 +17,7 @@ require 'load'
 
 require 'adagrad'
 
-data = load28('mnist/mnist.hdf5')
+data = load28('datasets/mnist.hdf5')
 
 dim_input = data.train:size(2) 
 dim_hidden = 20
@@ -89,12 +89,11 @@ while true do
     local time = sys.clock()
     for i = 1, data.train:size(1), batchSize do
         xlua.progress(i+batchSize-1, data.train:size(1))
-        batch = data.train[{{i,i+batchSize-1}}]
+        batch = data.train[{{i,math.min(data.train:size(1),i+batchSize-1)}}]
 
         batchlowerbound = adaGradUpdate(batch, opfunc)
         lowerbound = lowerbound + batchlowerbound
     end
 
     print("\nEpoch: " .. epoch .. " Lowerbound: " .. lowerbound/data.train:size(1) .. " time: " .. sys.clock() - time)
-    io.read()
 end
