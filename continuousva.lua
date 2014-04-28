@@ -30,9 +30,9 @@ hidden_units_encoder = 200
 hidden_units_decoder = 200
 
 batchSize = 20
-learningRate = 0.03
+learningRate = 0.05
 
-adaGradInitRounds = 10
+adaGradInitRounds = 5
 
 
 --The model

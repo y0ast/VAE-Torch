@@ -1,0 +1,5 @@
+- Shuffle data before each epoch
+- Adaptive learning rate? Come up with a way to increase learning at start
+- Write plotting code for lowerbound
+- Write plotting code for manifold
+- more consistent naming for criterion/parts of mdoel
