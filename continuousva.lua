@@ -25,14 +25,14 @@ torch.setnumthreads(2)
 data = loadfreyfaces('datasets/freyfaces.hdf5')
 dim_input = data.train:size(2)
 
-dim_hidden = 5
+dim_hidden = 2
 hidden_units_encoder = 200
 hidden_units_decoder = 200
 
 batchSize = 20
 learningRate = 0.05
 
-adaGradInitRounds = 5
+adaGradInitRounds = 10
 
 
 --The model
@@ -99,9 +99,19 @@ while true do
     epoch = epoch + 1
     local lowerbound = 0
     local time = sys.clock()
+    local shuffle = torch.randperm(data.train:size(1))
+
     for i = 1, data.train:size(1), batchSize do
-        xlua.progress(i+batchSize-1, data.train:size(1))
-        batch = data.train[{{i,math.min(data.train:size(1),i+batchSize-1)}}]
+        local iend = math.min(data.train:size(1),i+batchSize-1)
+        xlua.progress(iend, data.train:size(1))
+
+        local batch = torch.Tensor(iend-i+1,data.train:size(2))
+        local k = 1
+
+        for j = i,iend do
+            batch[k] = data.train[shuffle[j]]:clone() 
+            k = k + 1
+        end
 
         batchlowerbound = adaGradUpdate(batch, opfunc)
         lowerbound = lowerbound + batchlowerbound
