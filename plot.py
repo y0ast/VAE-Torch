@@ -7,27 +7,28 @@ import h5py
 
 """
 Code for creating manifold later!
-
+if continuous:
+        h_decoder = np.log(1 + np.exp(np.dot(W4,z) + b4))
+        y = 1 / (1 + np.exp(-(W5.dot(h_decoder) + b5)))
 """
 
 def manifold(gridSize, epoch):
-    f = h5py.File('params/epoch_' + epoch + '.hdf5','r')
+    f = h5py.File('params/epoch_' + str(epoch) + '.hdf5','r')
 
-    wtanh = np.array(f["wtanh"])
-    btanh = np.array(f["btanh"])
-    wsig = np.array(f["wsig"])
-    bsig = np.array(f["bsig"])
+    shape = (28,28)
+
+    wtanh = np.matrix(f["wtanh"])
+    btanh = np.matrix(f["btanh"]).T
+    wsig = np.matrix(f["wsig"])
+    bsig = np.matrix(f["bsig"]).T
 
     wb = (wtanh,btanh,wsig,bsig)
     gridValues = np.linspace(0.05,0.95,gridSize)
 
+    #Create matrix of z instead of with lambda
     z = lambda i,j: np.matrix([sp.norm.ppf(gridValues[i]),sp.norm.ppf(gridValues[j])]).T
 
-    if continuous:
-        h_decoder = np.log(1 + np.exp(np.dot(W4,z) + b4))
-        y = 1 / (1 + np.exp(-(W5.dot(h_decoder) + b5)))
-
-    image = np.vstack([np.hstack([activation_binary(z(i+j),wb).reshape(shape) for j in xrange(numcols)]) for i in columns])
+    image = np.vstack([np.hstack([activation_binary(z(i,j),wb).reshape(shape) for j in xrange(gridSize)]) for i in xrange(gridSize)])
 
     plt.imshow(image, interpolation='nearest', cmap='Greys')
     plt.axis('off')
@@ -35,6 +36,7 @@ def manifold(gridSize, epoch):
 
 def activation_binary(z, wb):
     wtanh, btanh, wsig, bsig = wb
+
     h = np.tanh(wtanh.dot(z) + btanh)
     y = 1 / (1 + np.exp(-(wsig.dot(h) + bsig)))
 
@@ -54,4 +56,4 @@ def plotdigits(numcols):
     plt.axis('off')
     plt.show()
 
-manifold(10,5)
+manifold(10,2)

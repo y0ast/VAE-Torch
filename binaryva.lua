@@ -23,7 +23,7 @@ require 'adagrad'
 data = load28('datasets/mnist.hdf5')
 
 dim_input = data.train:size(2) 
-dim_hidden = 20
+dim_hidden = 2
 hidden_units_encoder = 400
 hidden_units_decoder = 400
 
@@ -114,10 +114,10 @@ while true do
     if epoch % 2 == 0 then
         local myFile = hdf5.open('params/epoch_' .. epoch .. '.hdf5', 'w')
 
-        myFile:write('weighttanh', va:get(3).weight)
-        myFile:write('biastanh', va:get(3).bias)
-        myFile:write('weightsigmoid', va:get(5).weight)
-        myFile:write('biassigmoid', va:get(5).bias)
+        myFile:write('wtanh', va:get(3).weight)
+        myFile:write('btanh', va:get(3).bias)
+        myFile:write('wsig', va:get(5).weight)
+        myFile:write('bsig', va:get(5).bias)
 
         myFile:close()
     end
