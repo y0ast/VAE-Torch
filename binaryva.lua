@@ -82,14 +82,25 @@ end
 
 h = adaGradInit(data.train, opfunc, adaGradInitRounds)
 
+
 epoch = 0
 while true do
     epoch = epoch + 1
     local lowerbound = 0
     local time = sys.clock()
+    local shuffle = torch.randperm(data.train:size(1))
+
     for i = 1, data.train:size(1), batchSize do
-        xlua.progress(i+batchSize-1, data.train:size(1))
-        batch = data.train[{{i,math.min(data.train:size(1),i+batchSize-1)}}]
+        local iend = math.min(data.train:size(1),i+batchSize-1)
+        xlua.progress(iend, data.train:size(1))
+
+        local batch = torch.Tensor(iend-i+1,data.train:size(2))
+
+        local k = 1
+        for j = i,iend do
+            batch[k] = data.train[shuffle[j]]:clone() 
+            k = k + 1
+        end
 
         batchlowerbound = adaGradUpdate(batch, opfunc)
         lowerbound = lowerbound + batchlowerbound

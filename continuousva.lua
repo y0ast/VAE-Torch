@@ -106,8 +106,8 @@ while true do
         xlua.progress(iend, data.train:size(1))
 
         local batch = torch.Tensor(iend-i+1,data.train:size(2))
-        local k = 1
 
+        local k = 1
         for j = i,iend do
             batch[k] = data.train[shuffle[j]]:clone() 
             k = k + 1
