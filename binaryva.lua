@@ -15,6 +15,9 @@ require 'LinearVA'
 --For loading data files
 require 'load'
 
+--For saving weights and biases
+require 'hdf5'
+
 require 'adagrad'
 
 data = load28('datasets/mnist.hdf5')
@@ -74,6 +77,7 @@ opfunc = function(batch)
     de_dw = KLD:backward(va:get(1).output, batch)
     encoder:backward(batch,de_dw)
 
+
     lowerbound = err  + KLDerr
     weights, grads = va:parameters()
 
@@ -107,4 +111,15 @@ while true do
     end
 
     print("\nEpoch: " .. epoch .. " Lowerbound: " .. lowerbound/data.train:size(1) .. " time: " .. sys.clock() - time)
+    if epoch % 2 == 0 then
+        local myFile = hdf5.open('params/epoch_' .. epoch .. '.hdf5', 'w')
+
+        myFile:write('weighttanh', va:get(3).weight)
+        myFile:write('biastanh', va:get(3).bias)
+        myFile:write('weightsigmoid', va:get(5).weight)
+        myFile:write('biassigmoid', va:get(5).bias)
+
+        myFile:close()
+    end
+
 end
