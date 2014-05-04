@@ -92,12 +92,29 @@ opfunc = function(batch)
     lowerbound = err  + KLDerr
     weights, grads = va:parameters()
 
+
     return weights, grads, lowerbound
 end
 
-h = adaGradInit(data.train, opfunc, adaGradInitRounds)
 
-epoch = 0
+--Continue old training session
+continue = true
+epoch = 4
+
+if continue then
+    path = 'params/ff_epoch_' .. epoch .. '.hdf5'
+
+    h = torch.load('params/adagrad_' .. epoch)
+
+    weights, bias = va:getParameters()
+    weights:copy(torch.load('params/model_' .. epoch))
+else
+    epoch = 0
+    h = adaGradInit(data.train, opfunc, adaGradInitRounds)
+end
+
+
+--The main loop
 while true do
     epoch = epoch + 1
     local lowerbound = 0
@@ -116,19 +133,23 @@ while true do
             k = k + 1
         end
 
-        batchlowerbound = adaGradUpdate(batch, opfunc)
+        batchlowerbound = adaGradUpdate(batch, opfunc, h)
         lowerbound = lowerbound + batchlowerbound
     end
 
     print("\nEpoch: " .. epoch .. " Lowerbound: " .. lowerbound/data.train:size(1) .. " time: " .. sys.clock() - time)
-    if epoch % 20 == 0 then
+    if epoch % 2 == 0 then
         local myFile = hdf5.open('params/ff_epoch_' .. epoch .. '.hdf5', 'w')
 
         myFile:write('wrelu', va:get(3).weight)
         myFile:write('brelu', va:get(3).bias)
         myFile:write('wsig', decoder:get(1).weight)
         myFile:write('bsig', decoder:get(1).bias)
-
         myFile:close()
+
+        weights, bias = va:getParameters()
+        torch.save('params/model_' .. epoch, weights)
+        torch.save('params/adagrad_' .. epoch, h)
+
     end
 end

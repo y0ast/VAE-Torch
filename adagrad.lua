@@ -18,7 +18,7 @@ function adaGradInit(data, opfunc, adaGradInitRounds)
     return h
 end
 
-function adaGradUpdate(batch, opfunc)
+function adaGradUpdate(batch, opfunc, h)
     weights, grads, lowerbound = opfunc(batch)
 
     for i=1,#h do
