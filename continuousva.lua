@@ -15,6 +15,9 @@ require 'LinearVA'
 --For loading data files
 require 'load'
 
+--For saving weights and biases
+require 'hdf5'
+
 require 'adagrad'
 
 torch.manualSeed(1)
@@ -118,4 +121,14 @@ while true do
     end
 
     print("\nEpoch: " .. epoch .. " Lowerbound: " .. lowerbound/data.train:size(1) .. " time: " .. sys.clock() - time)
+    if epoch % 20 == 0 then
+        local myFile = hdf5.open('params/ff_epoch_' .. epoch .. '.hdf5', 'w')
+
+        myFile:write('wrelu', va:get(3).weight)
+        myFile:write('brelu', va:get(3).bias)
+        myFile:write('wsig', decoder:get(1).weight)
+        myFile:write('bsig', decoder:get(1).bias)
+
+        myFile:close()
+    end
 end

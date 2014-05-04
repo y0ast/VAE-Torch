@@ -4,35 +4,37 @@ import matplotlib.pyplot as plt
 
 import h5py
 
+def manifold(gridSize, binary, epoch):
 
-"""
-Code for creating manifold later!
-if continuous:
-        h_decoder = np.log(1 + np.exp(np.dot(W4,z) + b4))
-        y = 1 / (1 + np.exp(-(W5.dot(h_decoder) + b5)))
-"""
+    f = h5py.File('params/ff_epoch_' + str(epoch) + '.hdf5','r')
 
-def manifold(gridSize, epoch):
-    f = h5py.File('params/epoch_' + str(epoch) + '.hdf5','r')
-
-    shape = (28,28)
-
-    wtanh = np.matrix(f["wtanh"])
-    btanh = np.matrix(f["btanh"]).T
     wsig = np.matrix(f["wsig"])
     bsig = np.matrix(f["bsig"]).T
 
-    wb = (wtanh,btanh,wsig,bsig)
+    if binary:
+        shape = (28,28)
+        activation = lambda z, wb : activation_binary(z,wb)
+        wtanh = np.matrix(f["wtanh"])
+        btanh = np.matrix(f["btanh"]).T
+        wb = (wtanh,btanh,wsig,bsig)
+    else:
+        shape = (28,20)
+        activation = lambda z, wb: activation_continuous(z,wb)
+        wrelu = np.matrix(f["wrelu"])
+        brelu = np.matrix(f["brelu"]).T
+        wb = (wrelu,brelu,wsig,bsig)
+
     gridValues = np.linspace(0.05,0.95,gridSize)
 
-    #Create matrix of z instead of with lambda
-    z = lambda i,j: np.matrix([sp.norm.ppf(gridValues[i]),sp.norm.ppf(gridValues[j])]).T
+    z = lambda gridpoint: np.matrix(sp.norm.ppf(gridpoint)).T
 
-    image = np.vstack([np.hstack([activation_binary(z(i,j),wb).reshape(shape) for j in xrange(gridSize)]) for i in xrange(gridSize)])
 
-    plt.imshow(image, interpolation='nearest', cmap='Greys')
+    image = np.vstack([np.hstack([activation(z((i,j)),wb).reshape(shape) for j in gridValues]) for i in gridValues])
+
+    plt.imshow(image, cmap='Greys')
     plt.axis('off')
     plt.show()
+
 
 def activation_binary(z, wb):
     wtanh, btanh, wsig, bsig = wb
@@ -42,18 +44,14 @@ def activation_binary(z, wb):
 
     return y
 
-def plotdigits(numcols):
-    f = h5py.File('datasets/mnist.hdf5','r')
-    data = np.array(f["x_train"])
+def activation_continuous(z, wb):
+    wrelu, brelu, wsig, bsig = wb
 
-    shape = (28,28)
+    h = np.log(1 + np.exp(np.dot(wrelu,z) + brelu))
+    y = 1 / (1 + np.exp(-(np.dot(wsig,h) + bsig)))
 
-    columns = np.arange(0,numcols**2,numcols)
+    return y
 
-    image = np.vstack([np.hstack([data[i+j].reshape(shape) for j in xrange(numcols)]) for i in columns])
-    
-    plt.imshow(image, interpolation='nearest', cmap='Greys')
-    plt.axis('off')
-    plt.show()
 
-manifold(10,2)
+#Gridsize, Binary (True/False), Epoch number for params
+manifold(10,False,740)
