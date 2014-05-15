@@ -1,3 +1,5 @@
 - Adaptive learning rate? Come up with a way to increase learning at start
 - Write plotting code for lowerbound
 - more consistent naming for criterion/parts of model
+- get test lowerbound and save
+- Add tests with Jacobian

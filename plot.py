@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import h5py
 
 def manifold(gridSize, binary, epoch):
-
     f = h5py.File('params/ff_epoch_' + str(epoch) + '.hdf5','r')
 
     wsig = np.matrix(f["wsig"])

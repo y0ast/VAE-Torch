@@ -1,9 +1,9 @@
 function adaGradInit(data, opfunc, adaGradInitRounds)
-    h = {}
+    local h = {}
     for i = 1, batchSize*adaGradInitRounds+1, batchSize do
         local batch = data[{{i,i+batchSize-1}}]
 
-        weights, grads, lowerbound = opfunc(batch)
+        local weights, grads, lowerbound = opfunc(batch)
 
         for j=1,#grads do
             if h[j] == nil then
@@ -19,7 +19,7 @@ function adaGradInit(data, opfunc, adaGradInitRounds)
 end
 
 function adaGradUpdate(batch, opfunc, h)
-    weights, grads, lowerbound = opfunc(batch)
+    local weights, grads, lowerbound = opfunc(batch)
 
     for i=1,#h do
         h[i]:add(torch.cmul(grads[i],grads[i]))

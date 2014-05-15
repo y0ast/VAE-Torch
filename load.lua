@@ -27,7 +27,8 @@ end
 function loadfreyfaces(path)
     local f = hdf5.open(path, 'r')
     local data = {}
-    data.train = f:read('data'):all():double()
+    data.train = f:read('train'):all():double()
+    data.test = f:read('test'):all():double()
 
     return data
 end

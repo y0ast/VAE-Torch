@@ -13,7 +13,6 @@ end
 
 function Reparametrize:updateOutput(input)
     --Different eps for whole batch, or one and broadcast?
-    -- self.eps = torch.randn(1, self.dimension):expandAs(input[2])
     self.eps = torch.randn(input[2]:size(1),self.dimension)
     self.output = torch.mul(input[2],0.5):exp():cmul(self.eps)
 
