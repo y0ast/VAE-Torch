@@ -3,10 +3,10 @@ require 'sys'
 require 'torch'
 require 'nn'
 require 'xlua'
+require 'optim'
 
 --Packages necessary for SGVB
 require 'Reparametrize'
-require 'BCECriterion'
 require 'KLDCriterion'
 
 --Custom Linear module to support different reset function
@@ -15,22 +15,15 @@ require 'LinearVA'
 --For loading data files
 require 'load'
 
---For saving weights and biases
-require 'hdf5'
-
-require 'adagrad'
-
-data = load28('datasets/mnist.hdf5')
+data = load32()
 
 dim_input = data.train:size(2) 
-dim_hidden = 2
+dim_hidden = 10
 hidden_units_encoder = 400
 hidden_units_decoder = 400
 
 batchSize = 100
-learningRate = 0.03
 
-adaGradInitRounds = 10
 
 torch.manualSeed(1)
 --Does not seem to do anything
@@ -63,28 +56,16 @@ va:add(nn.Sigmoid())
 
 --Binary cross entropy term
 BCE = nn.BCECriterion()
+BCE.sizeAverage = false
 KLD = nn.KLDCriterion()
 
-opfunc = function(batch) 
-    va:zeroGradParameters()
+parameters, gradients = va:getParameters()
 
-    f = va:forward(batch)
-    err = BCE:forward(f, batch)
-    df_dw = BCE:backward(f, batch)
-    va:backward(batch,df_dw)
+config = {
+    learningRate = -0.03,
+}
 
-    KLDerr = KLD:forward(va:get(1).output, batch)
-    de_dw = KLD:backward(va:get(1).output, batch)
-    encoder:backward(batch,de_dw)
-
-
-    lowerbound = err  + KLDerr
-    weights, grads = va:parameters()
-
-    return weights, grads, lowerbound
-end
-
-h = adaGradInit(data.train, opfunc, adaGradInitRounds)
+state = {}
 
 
 epoch = 0
@@ -94,7 +75,11 @@ while true do
     local time = sys.clock()
     local shuffle = torch.randperm(data.train:size(1))
 
-    for i = 1, data.train:size(1), batchSize do
+    --Make sure batches are always batchSize
+    local N = data.train:size(1) - (data.train:size(1) % batchSize)
+    local N_test = data.test:size(1) - (data.test:size(1) % batchSize)
+
+    for i = 1, N, batchSize do
         local iend = math.min(data.train:size(1),i+batchSize-1)
         xlua.progress(iend, data.train:size(1))
 
@@ -106,20 +91,45 @@ while true do
             k = k + 1
         end
 
-        batchlowerbound = adaGradUpdate(batch, opfunc)
-        lowerbound = lowerbound + batchlowerbound
+        local opfunc = function(x)
+            if x ~= parameters then
+                parameters:copy(x)
+            end
+
+            va:zeroGradParameters()
+
+            local f = va:forward(batch)
+            local err = - BCE:forward(f, batch)
+            local df_dw = BCE:backward(f, batch):mul(-1)
+
+            va:backward(batch,df_dw)
+
+            local KLDerr = KLD:forward(va:get(1).output, batch)
+            local de_dw = KLD:backward(va:get(1).output, batch)
+
+            encoder:backward(batch,de_dw)
+
+            local lowerbound = err  + KLDerr
+
+            return lowerbound, gradients
+        end
+
+        x, batchlowerbound = optim.adagrad(opfunc, parameters, config, state)
+        lowerbound = lowerbound + batchlowerbound[1]
     end
 
-    print("\nEpoch: " .. epoch .. " Lowerbound: " .. lowerbound/data.train:size(1) .. " time: " .. sys.clock() - time)
+    print("\nEpoch: " .. epoch .. " Lowerbound: " .. lowerbound/N .. " time: " .. sys.clock() - time)
+
+    if lowerboundlist then
+        lowerboundlist = torch.cat(lowerboundlist,torch.Tensor(1,1):fill(lowerbound/N),1)
+    else
+        lowerboundlist = torch.Tensor(1,1):fill(lowerbound/N)
+    end
+
     if epoch % 2 == 0 then
-        local myFile = hdf5.open('params/epoch_' .. epoch .. '.hdf5', 'w')
-
-        myFile:write('wtanh', va:get(3).weight)
-        myFile:write('btanh', va:get(3).bias)
-        myFile:write('wsig', va:get(5).weight)
-        myFile:write('bsig', va:get(5).bias)
-
-        myFile:close()
+        torch.save('save/parameters.t7', parameters)
+        torch.save('save/state.t7', state)
+        torch.save('save/lowerbound.t7', torch.Tensor(lowerboundlist))
     end
 
 end
