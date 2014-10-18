@@ -15,7 +15,6 @@ require 'LinearVA'
 --For loading data files
 require 'load'
 
-
 data = load32()
 
 dim_input = data.train:size(2) 
@@ -100,21 +99,22 @@ while true do
             va:zeroGradParameters()
 
             local f = va:forward(batch)
-            local err = BCE:forward(f, batch)
-            local df_dw = BCE:backward(f, batch)
+            local err = - BCE:forward(f, batch)
+            local df_dw = BCE:backward(f, batch):mul(-1)
+
             va:backward(batch,df_dw)
 
             local KLDerr = KLD:forward(va:get(1).output, batch)
             local de_dw = KLD:backward(va:get(1).output, batch)
+
             encoder:backward(batch,de_dw)
 
-            lowerbound = err  + KLDerr
+            local lowerbound = err  + KLDerr
 
             return lowerbound, gradients
         end
 
         x, batchlowerbound = optim.adagrad(opfunc, parameters, config, state)
-        print(batchlowerbound[1])
         lowerbound = lowerbound + batchlowerbound[1]
     end
 

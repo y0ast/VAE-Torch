@@ -14,17 +14,6 @@ function load32()
     return data
 end
 
-function load28(path)
-    local f = hdf5.open(path, 'r')
-
-    local data = {}
-    data.train = f:read('x_train'):all():double()
-    data.valid = f:read('x_valid'):all():double()
-    data.test = f:read('x_test'):all():double()
-
-    return data
-end
-
 function loadfreyfaces(path)
     local f = hdf5.open(path, 'r')
     local data = {}
