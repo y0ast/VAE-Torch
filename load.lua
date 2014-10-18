@@ -1,16 +1,17 @@
-require 'hdf5'
-
 function load32()
-    train = torch.load('datasets/train_32x32.t7', 'ascii')
-    test = torch.load('datasets/test_32x32.t7', 'ascii')
+    data = {}
+    data.train = torch.load('datasets/train_32x32.t7', 'ascii').data
+    data.test = torch.load('datasets/test_32x32.t7', 'ascii').data
 
     --Convert training data to floats
-    train.data = train.data:double()
-    test.data = test.data:double()
+    data.train = data.train:double()
+    data.test = data.test:double()
 
     --Rescale to 0..1 and invert
-    train.data:div(255):resize(60000,1024)
-    test.data:div(255):resize(10000,1024)
+    data.train:div(255):resize(60000,1024)
+    data.test:div(255):resize(10000,1024)
+
+    return data
 end
 
 function load28(path)
