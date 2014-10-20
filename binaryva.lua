@@ -24,10 +24,7 @@ hidden_units_decoder = 400
 
 batchSize = 100
 
-
 torch.manualSeed(1)
---Does not seem to do anything
-torch.setnumthreads(2)
 
 --The model
 
@@ -80,13 +77,12 @@ while true do
     local N_test = data.test:size(1) - (data.test:size(1) % batchSize)
 
     for i = 1, N, batchSize do
-        local iend = math.min(data.train:size(1),i+batchSize-1)
-        xlua.progress(iend, data.train:size(1))
+        xlua.progress(i+batchSize-1, data.train:size(1))
 
-        local batch = torch.Tensor(iend-i+1,data.train:size(2))
+        local batch = torch.Tensor(batchSize,data.train:size(2))
 
         local k = 1
-        for j = i,iend do
+        for j = i,i+batchSize-1 do
             batch[k] = data.train[shuffle[j]]:clone() 
             k = k + 1
         end

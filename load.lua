@@ -15,6 +15,7 @@ function load32()
 end
 
 function loadfreyfaces(path)
+    require 'hdf5'
     local f = hdf5.open(path, 'r')
     local data = {}
     data.train = f:read('train'):all():double()
