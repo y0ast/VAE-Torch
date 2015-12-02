@@ -8,7 +8,6 @@ function GaussianCriterion:updateOutput(input, target)
     -- input[2] = log(sigma^2)
 
     local Gelement = torch.mul(input[2],0.5):add(0.5 * math.log(2 * math.pi))
-
     Gelement:add(torch.add(target,-1,input[1]):pow(2):cdiv(torch.exp(input[2])):mul(0.5))
 
     self.output = torch.sum(Gelement)
