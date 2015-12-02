@@ -1,25 +1,35 @@
-function load32()
+require 'hdf5'
+
+function load(continuous)
+    if continuous then
+        return loadfreyfaces()
+    else
+        return loadmnist()
+    end
+end
+
+function loadmnist()
+    -- This loads an hdf5 version of the MNIST dataset used here: http://deeplearning.net/tutorial/gettingstarted.html
+    -- Direct link: http://deeplearning.net/data/mnist/mnist.pkl.gz
+
+    local f = hdf5.open('datasets/mnist.hdf5', 'r')
+
     data = {}
-    data.train = torch.load('datasets/train_32x32.t7', 'ascii').data
-    data.test = torch.load('datasets/test_32x32.t7', 'ascii').data
+    data.train = f:read('x_train'):all():double()
+    data.test = f:read('x_test'):all():double()
 
-    --Convert training data to floats
-    data.train = data.train:double()
-    data.test = data.test:double()
-
-    --Rescale to 0..1 and invert
-    data.train:div(255):resize(60000,1024)
-    data.test:div(255):resize(10000,1024)
+    f:close()
 
     return data
 end
 
-function loadfreyfaces(path)
+function loadfreyfaces()
     require 'hdf5'
-    local f = hdf5.open(path, 'r')
+    local f = hdf5.open('datasets/freyfaces.hdf5', 'r')
     local data = {}
     data.train = f:read('train'):all():double()
     data.test = f:read('test'):all():double()
+    f:close()
 
     return data
 end
