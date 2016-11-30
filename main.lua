@@ -1,13 +1,10 @@
 -- Joost van Amersfoort - <joost@joo.st>
 require 'torch'
 require 'nn'
-require 'nngraph'
 require 'optim'
 
-nngraph.setDebug(false)
-
 local VAE = require 'VAE'
-require 'KLDCriterion'
+require 'KLDPenalty'
 require 'GaussianCriterion'
 require 'Sampler'
 
@@ -28,30 +25,20 @@ torch.manualSeed(1)
 local encoder = VAE.get_encoder(input_size, hidden_layer_size, latent_variable_size)
 local decoder = VAE.get_decoder(input_size, hidden_layer_size, latent_variable_size, continuous)
 
-local input = nn.Identity()()
-local mean, log_var = encoder(input):split(2)
-local z = nn.Sampler()({mean, log_var})
+local KLD = nn.KLDPenalty()
 
-local reconstruction, reconstruction_var, model
+local model = nn.Sequential()
+model:add(encoder)
+model:add(KLD)
+model:add(nn.Sampler())
+model:add(decoder)
+
 if continuous then
-    reconstruction, reconstruction_var = decoder(z):split(2)
-    model = nn.gModule({input},{reconstruction, reconstruction_var, mean, log_var})
     criterion = nn.GaussianCriterion()
 else
-    reconstruction = decoder(z)
-    model = nn.gModule({input},{reconstruction, mean, log_var})
     criterion = nn.BCECriterion()
     criterion.sizeAverage = false
 end
-
--- Some code to draw computational graph
--- dummy_x = torch.rand(dim_input)
--- model:forward({dummy_x})
-
--- Uncomment to get structure of the Variational Autoencoder
--- graph.dot(.fg, 'Variational Autoencoder', 'VA')
-
-KLD = nn.KLDCriterion()
 
 local parameters, gradients = model:getParameters()
 
@@ -86,29 +73,13 @@ while true do
             end
 
             model:zeroGradParameters()
-            local reconstruction, reconstruction_var, mean, log_var
-            if continuous then
-                reconstruction, reconstruction_var, mean, log_var = unpack(model:forward(inputs))
-                reconstruction = {reconstruction, reconstruction_var}
-            else
-                reconstruction, mean, log_var = unpack(model:forward(inputs))
-            end
 
+            local reconstruction = model:forward(inputs)
             local err = criterion:forward(reconstruction, inputs)
             local df_dw = criterion:backward(reconstruction, inputs)
+            model:backward(inputs, df_dw)
 
-            local KLDerr = KLD:forward(mean, log_var)
-            local dKLD_dmu, dKLD_dlog_var = unpack(KLD:backward(mean, log_var))
-
-            if continuous then
-                error_grads = {df_dw[1], df_dw[2], dKLD_dmu, dKLD_dlog_var}
-            else
-                error_grads = {df_dw, dKLD_dmu, dKLD_dlog_var}
-            end
-
-            model:backward(inputs, error_grads)
-
-            local batchlowerbound = err + KLDerr
+            local batchlowerbound = err + KLD.loss
 
             return batchlowerbound, gradients
         end
