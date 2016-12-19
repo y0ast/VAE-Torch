@@ -12,3 +12,4 @@ Setting the continuous boolean to true will make the script run the freyfaces ex
 
 The code is MIT licensed.
 
+I gratefully reused MNIST downloading and reading code written by [Rahul G. Krishnan](https://github.com/clinicalml/dgm).
